@@ -4,6 +4,8 @@ import '../providers/auth_provider.dart';
 import '../providers/emergency_provider.dart';
 import '../models/emergency_model.dart';
 import 'live_map_screen.dart';
+import 'emergency_history_screen.dart';
+import 'fir_report_screen.dart';
 
 /// Police dashboard screen
 /// Shows active emergencies and allows police to respond
@@ -18,7 +20,15 @@ class _PoliceDashboardScreenState extends State<PoliceDashboardScreen> {
   @override
   void initState() {
     super.initState();
-    _loadEmergencies();
+    _subscribeToEmergencies();
+  }
+
+  void _subscribeToEmergencies() {
+    final emergencyProvider = Provider.of<EmergencyProvider>(
+      context,
+      listen: false,
+    );
+    emergencyProvider.subscribeToActiveEmergencies(() {});
   }
 
   Future<void> _loadEmergencies() async {
@@ -35,6 +45,16 @@ class _PoliceDashboardScreenState extends State<PoliceDashboardScreen> {
       appBar: AppBar(
         title: const Text('Police Dashboard'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: 'Incident History',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const EmergencyHistoryScreen(),
+              ),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadEmergencies,
@@ -316,6 +336,26 @@ class _EmergencyCard extends StatelessWidget {
                   ),
                 ),
               ),
+
+            // Generate FIR button — always available
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => FirReportScreen(emergency: emergency),
+                  ),
+                ),
+                icon: const Icon(Icons.picture_as_pdf, color: Colors.red),
+                label: const Text('Generate FIR Report',
+                    style: TextStyle(color: Colors.red)),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.red),
+                ),
+              ),
+            ),
           ],
         ),
       ),

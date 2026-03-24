@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'providers/auth_provider.dart';
 import 'providers/emergency_provider.dart';
 import 'screens/splash_screen.dart';
@@ -10,8 +12,15 @@ import 'screens/women_dashboard_screen.dart';
 import 'screens/police_dashboard_screen.dart';
 
 /// Main entry point of the Women Safety App
-/// Initializes providers and navigation
-void main() {
+/// Initializes Firebase and providers
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize Firebase
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  
   runApp(const WomenSafetyApp());
 }
 

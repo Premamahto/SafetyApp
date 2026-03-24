@@ -1,35 +1,35 @@
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/emergency_model.dart';
 import '../models/user_model.dart';
 import 'location_service.dart';
-import 'database_service.dart';
+import 'firebase_service.dart';
+import 'contacts_service.dart';
 
 /// Emergency service handling SOS triggers, calls, and SMS
-/// Core service for emergency response functionality
+/// Core service for emergency response functionality with Firebase
 class EmergencyService {
   final LocationService _locationService = LocationService();
-  final DatabaseService _dbService = DatabaseService.instance;
-  
-  // Police emergency number
+  final FirebaseService _firebaseService = FirebaseService.instance;
+  final ContactsService _contactsService = ContactsService();
+
+  // Police emergency number (always included)
   static const String policeNumber = '+919328103613';
 
   /// Trigger emergency - called when power button triple-clicked
   Future<EmergencyModel?> triggerEmergency(UserModel user) async {
     try {
-      // Get current location
       final position = await _locationService.getCurrentLocation();
       if (position == null) {
         print('Failed to get location');
         return null;
       }
 
-      // Get address from coordinates
       final address = await _locationService.getAddressFromCoordinates(
         position.latitude,
         position.longitude,
       );
 
-      // Create emergency record
       final emergency = EmergencyModel(
         id: 'emergency_${DateTime.now().millisecondsSinceEpoch}',
         userId: user.id,
@@ -42,14 +42,18 @@ class EmergencyService {
         status: EmergencyStatus.helpRequested,
       );
 
-      // Save to database
-      await _dbService.createEmergency(emergency);
-
-      // Make emergency call
+      await _firebaseService.createEmergency(emergency);
       await makeEmergencyCall();
 
-      // Send emergency SMS
-      await sendEmergencySMS(emergency);
+      // Load user's saved contacts and send SMS to all of them + police
+      final contacts = await _contactsService.getContacts(user.id);
+      final phones = <String>{policeNumber};
+      for (final c in contacts) {
+        if (c.phone.isNotEmpty) phones.add(c.phone);
+      }
+      for (final phone in phones) {
+        await sendEmergencySMS(emergency, phone);
+      }
 
       return emergency;
     } catch (e) {
@@ -73,10 +77,10 @@ class EmergencyService {
     }
   }
 
-  /// Send emergency SMS with location
-  Future<void> sendEmergencySMS(EmergencyModel emergency) async {
-    final message = '''
-🚨 EMERGENCY ALERT 🚨
+  /// Send emergency SMS with location to a specific phone number.
+  /// Uses native SmsManager (silent). Falls back to SMS app if it fails.
+  Future<void> sendEmergencySMS(EmergencyModel emergency, String phone) async {
+    final message = '''EMERGENCY ALERT!
 
 ${emergency.userName} needs immediate help!
 
@@ -87,24 +91,36 @@ Google Maps: ${emergency.googleMapsLink}
 
 Time: ${emergency.triggeredAt.toString()}
 
-Please respond immediately!
-''';
+Please respond immediately!''';
 
     try {
-      // Use SMS URL scheme to send SMS
-      final Uri smsUri = Uri(
-        scheme: 'sms',
-        path: policeNumber,
-        queryParameters: {'body': message},
-      );
-      
-      if (await canLaunchUrl(smsUri)) {
-        await launchUrl(smsUri);
+      const smsChannel = MethodChannel('women_safety_app/sms');
+      final success = await smsChannel.invokeMethod<bool>('sendSms', {
+        'phone': phone,
+        'message': message,
+      });
+      if (success == true) {
+        print('SMS sent silently to $phone');
       } else {
-        print('Cannot send SMS');
+        await _fallbackSmsApp(phone, message);
       }
+    } on PlatformException catch (e) {
+      print('Native SMS failed: $e — falling back to SMS app');
+      await _fallbackSmsApp(phone, message);
     } catch (e) {
       print('Error sending SMS: $e');
+    }
+  }
+
+  /// Fallback: open SMS app pre-filled (used if SmsManager fails)
+  Future<void> _fallbackSmsApp(String phone, String message) async {
+    final Uri smsUri = Uri(
+      scheme: 'sms',
+      path: phone,
+      queryParameters: {'body': message},
+    );
+    if (await canLaunchUrl(smsUri)) {
+      await launchUrl(smsUri);
     }
   }
 
@@ -121,7 +137,7 @@ Please respond immediately!
       policeName: policeName,
     );
 
-    await _dbService.updateEmergency(updatedEmergency);
+    await _firebaseService.updateEmergency(updatedEmergency);
   }
 
   /// Mark rescue completed (for police)
@@ -137,7 +153,7 @@ Please respond immediately!
       rescueCompletedAt: DateTime.now(),
     );
 
-    await _dbService.updateEmergency(updatedEmergency);
+    await _firebaseService.updateEmergency(updatedEmergency);
   }
 
   /// Confirm safety (for women)
@@ -152,7 +168,7 @@ Please respond immediately!
       safetyNotes: notes,
     );
 
-    await _dbService.updateEmergency(updatedEmergency);
+    await _firebaseService.updateEmergency(updatedEmergency);
   }
 
   /// Verify victim photo (for police)
@@ -165,16 +181,16 @@ Please respond immediately!
       isVerified: true,
     );
 
-    await _dbService.updateEmergency(updatedEmergency);
+    await _firebaseService.updateEmergency(updatedEmergency);
   }
 
   /// Get active emergencies (for police dashboard)
   Future<List<EmergencyModel>> getActiveEmergencies() async {
-    return await _dbService.getActiveEmergencies();
+    return await _firebaseService.getActiveEmergencies();
   }
 
   /// Get user's emergency history
   Future<List<EmergencyModel>> getUserEmergencies(String userId) async {
-    return await _dbService.getUserEmergencies(userId);
+    return await _firebaseService.getUserEmergencies(userId);
   }
 }

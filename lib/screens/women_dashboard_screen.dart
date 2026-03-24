@@ -3,8 +3,10 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/emergency_provider.dart';
 import '../models/emergency_model.dart';
+import '../widgets/accessibility_prompt.dart';
 import 'safety_confirmation_screen.dart';
 import 'emergency_history_screen.dart';
+import 'emergency_contacts_screen.dart';
 
 /// Women dashboard screen
 /// Main interface for women users with emergency trigger and status
@@ -40,6 +42,16 @@ class _WomenDashboardScreenState extends State<WomenDashboardScreen> {
       appBar: AppBar(
         title: const Text('Women Safety Dashboard'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.contacts),
+            tooltip: 'Emergency Contacts',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const EmergencyContactsScreen(),
+              ),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.history),
             onPressed: () {
@@ -80,6 +92,9 @@ class _WomenDashboardScreenState extends State<WomenDashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Accessibility service prompt (shown only if not enabled)
+                const AccessibilityPrompt(),
+
                 // Welcome Card
                 Card(
                   child: Padding(

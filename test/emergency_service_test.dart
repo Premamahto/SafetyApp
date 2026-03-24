@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:women_safety_app/models/user_model.dart';
 import 'package:women_safety_app/models/emergency_model.dart';
-import 'package:women_safety_app/services/emergency_service.dart';
 
 /// Unit tests for Emergency Service
 /// Tests emergency trigger, status updates, and rescue operations

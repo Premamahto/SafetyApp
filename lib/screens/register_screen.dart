@@ -228,6 +228,61 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   const SizedBox(height: 20),
                   
+                  // Divider with OR
+                  Row(
+                    children: const [
+                      Expanded(child: Divider()),
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        child: Text('OR'),
+                      ),
+                      Expanded(child: Divider()),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  // Google Sign-In Button
+                  OutlinedButton.icon(
+                    onPressed: authProvider.isLoading ? null : () async {
+                      final success = await authProvider.signInWithGoogle(
+                        role == 'woman' ? UserRole.woman : UserRole.police,
+                      );
+                      
+                      if (!mounted) return;
+                      
+                      if (success) {
+                        final user = authProvider.currentUser!;
+                        
+                        if (user.role == UserRole.woman) {
+                          Navigator.pushReplacementNamed(context, '/women-dashboard');
+                        } else {
+                          Navigator.pushReplacementNamed(context, '/police-dashboard');
+                        }
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Google Sign-In failed. Please try again.'),
+                            backgroundColor: Colors.red,
+                            duration: Duration(seconds: 3),
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.g_mobiledata, size: 32),
+                    label: const Text(
+                      'Sign up with Google',
+                      style: TextStyle(fontSize: 16),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      side: const BorderSide(color: Colors.grey),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  
                   // Login Link
                   TextButton(
                     onPressed: () {

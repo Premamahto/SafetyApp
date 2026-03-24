@@ -31,6 +31,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     
+    print('Attempting login with email: ${_emailController.text.trim()}');
+    
     final success = await authProvider.login(
       _emailController.text.trim(),
       _passwordController.text,
@@ -40,6 +42,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (success) {
       final user = authProvider.currentUser!;
+      print('Login successful! User: ${user.name}, Role: ${user.role}');
       
       // Navigate to appropriate dashboard
       if (user.role == UserRole.woman) {
@@ -48,10 +51,12 @@ class _LoginScreenState extends State<LoginScreen> {
         Navigator.pushReplacementNamed(context, '/police-dashboard');
       }
     } else {
+      print('Login failed for email: ${_emailController.text.trim()}');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Invalid email or password'),
+          content: Text('Invalid email or password. Check console for details.'),
           backgroundColor: Colors.red,
+          duration: Duration(seconds: 4),
         ),
       );
     }
@@ -155,6 +160,62 @@ class _LoginScreenState extends State<LoginScreen> {
                             'Login',
                             style: TextStyle(fontSize: 18),
                           ),
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  // Divider with OR
+                  Row(
+                    children: const [
+                      Expanded(child: Divider()),
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        child: Text('OR'),
+                      ),
+                      Expanded(child: Divider()),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  // Google Sign-In Button
+                  OutlinedButton.icon(
+                    onPressed: authProvider.isLoading ? null : () async {
+                      final success = await authProvider.signInWithGoogle(
+                        role == 'woman' ? UserRole.woman : UserRole.police,
+                      );
+                      
+                      if (!mounted) return;
+                      
+                      if (success) {
+                        final user = authProvider.currentUser!;
+                        print('Google Sign-In successful! Navigating to dashboard...');
+                        
+                        if (user.role == UserRole.woman) {
+                          Navigator.pushReplacementNamed(context, '/women-dashboard');
+                        } else {
+                          Navigator.pushReplacementNamed(context, '/police-dashboard');
+                        }
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Google Sign-In failed. Please try again.'),
+                            backgroundColor: Colors.red,
+                            duration: Duration(seconds: 3),
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.g_mobiledata, size: 32),
+                    label: const Text(
+                      'Continue with Google',
+                      style: TextStyle(fontSize: 16),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      side: const BorderSide(color: Colors.grey),
+                    ),
                   ),
                   const SizedBox(height: 20),
                   

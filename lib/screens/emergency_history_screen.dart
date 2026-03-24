@@ -1,54 +1,73 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
 import '../providers/emergency_provider.dart';
 import '../models/emergency_model.dart';
-import '../services/pdf_service.dart';
+import 'fir_report_screen.dart';
 
-/// Emergency history screen
-/// Shows past emergencies for women users
-class EmergencyHistoryScreen extends StatelessWidget {
+/// Emergency history screen — Women & Police
+/// Shows all past incidents with FIR generation on each
+class EmergencyHistoryScreen extends StatefulWidget {
   const EmergencyHistoryScreen({super.key});
+
+  @override
+  State<EmergencyHistoryScreen> createState() => _EmergencyHistoryScreenState();
+}
+
+class _EmergencyHistoryScreenState extends State<EmergencyHistoryScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final ep = Provider.of<EmergencyProvider>(context, listen: false);
+    final user = auth.currentUser;
+    if (user == null) return;
+
+    if (user.role.toString().contains('police')) {
+      await ep.loadActiveEmergencies();
+    } else {
+      await ep.loadUserEmergencies(user.id);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Emergency History'),
+        title: const Text('Incident History'),
       ),
       body: Consumer<EmergencyProvider>(
-        builder: (context, emergencyProvider, child) {
-          final emergencies = emergencyProvider.emergencies;
+        builder: (context, ep, _) {
+          if (ep.isLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-          if (emergencies.isEmpty) {
+          if (ep.emergencies.isEmpty) {
             return const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    Icons.history,
-                    size: 100,
-                    color: Colors.grey,
-                  ),
-                  SizedBox(height: 20),
-                  Text(
-                    'No Emergency History',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  Icon(Icons.history, size: 80, color: Colors.grey),
+                  SizedBox(height: 16),
+                  Text('No incidents found',
+                      style: TextStyle(fontSize: 18, color: Colors.grey)),
                 ],
               ),
             );
           }
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(16.0),
-            itemCount: emergencies.length,
-            itemBuilder: (context, index) {
-              final emergency = emergencies[index];
-              return _EmergencyHistoryCard(emergency: emergency);
-            },
+          return RefreshIndicator(
+            onRefresh: _load,
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: ep.emergencies.length,
+              itemBuilder: (context, i) =>
+                  _HistoryCard(emergency: ep.emergencies[i]),
+            ),
           );
         },
       ),
@@ -56,163 +75,143 @@ class EmergencyHistoryScreen extends StatelessWidget {
   }
 }
 
-/// Emergency history card widget
-class _EmergencyHistoryCard extends StatelessWidget {
+class _HistoryCard extends StatelessWidget {
   final EmergencyModel emergency;
+  const _HistoryCard({required this.emergency});
 
-  const _EmergencyHistoryCard({required this.emergency});
+  Color get _color {
+    switch (emergency.status) {
+      case EmergencyStatus.helpRequested:
+        return Colors.red;
+      case EmergencyStatus.policeOnTheWay:
+        return Colors.orange;
+      case EmergencyStatus.rescued:
+        return Colors.green;
+      case EmergencyStatus.safetyConfirmed:
+        return Colors.blue;
+    }
+  }
+
+  String get _statusText {
+    switch (emergency.status) {
+      case EmergencyStatus.helpRequested:
+        return 'Help Requested';
+      case EmergencyStatus.policeOnTheWay:
+        return 'Police On The Way';
+      case EmergencyStatus.rescued:
+        return 'Rescued';
+      case EmergencyStatus.safetyConfirmed:
+        return 'Safety Confirmed';
+    }
+  }
+
+  String _fmt(DateTime dt) =>
+      '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}  '
+      '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
 
   @override
   Widget build(BuildContext context) {
-    Color statusColor;
-    IconData statusIcon;
-    String statusText;
-
-    switch (emergency.status) {
-      case EmergencyStatus.helpRequested:
-        statusColor = Colors.red;
-        statusIcon = Icons.warning;
-        statusText = 'Help Requested';
-        break;
-      case EmergencyStatus.policeOnTheWay:
-        statusColor = Colors.orange;
-        statusIcon = Icons.directions_car;
-        statusText = 'Police On The Way';
-        break;
-      case EmergencyStatus.rescued:
-        statusColor = Colors.green;
-        statusIcon = Icons.check_circle;
-        statusText = 'Rescued';
-        break;
-      case EmergencyStatus.safetyConfirmed:
-        statusColor = Colors.blue;
-        statusIcon = Icons.verified;
-        statusText = 'Safety Confirmed';
-        break;
-    }
-
     return Card(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 14),
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Status Badge
+            // Status chip + date
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _color,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(_statusText,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12)),
+                ),
+                Text(_fmt(emergency.triggeredAt),
+                    style: TextStyle(
+                        fontSize: 12, color: Colors.grey.shade600)),
+              ],
+            ),
+            const SizedBox(height: 10),
+
+            // Victim name
+            Row(children: [
+              const Icon(Icons.person, size: 16, color: Colors.grey),
+              const SizedBox(width: 6),
+              Text(emergency.userName,
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+            ]),
+            const SizedBox(height: 4),
+
+            // Location
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Icon(Icons.location_on, size: 16, color: Colors.grey),
+              const SizedBox(width: 6),
+              Expanded(
+                  child: Text(emergency.address,
+                      style: const TextStyle(fontSize: 13))),
+            ]),
+
+            if (emergency.policeName != null) ...[
+              const SizedBox(height: 4),
+              Row(children: [
+                const Icon(Icons.local_police, size: 16, color: Colors.grey),
+                const SizedBox(width: 6),
+                Text('Officer: ${emergency.policeName}',
+                    style: const TextStyle(fontSize: 13)),
+              ]),
+            ],
+
+            const SizedBox(height: 12),
+
+            // View Details + Generate FIR
             Row(
               children: [
-                Icon(statusIcon, color: statusColor),
-                const SizedBox(width: 8),
-                Text(
-                  statusText,
-                  style: TextStyle(
-                    color: statusColor,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            FirReportScreen(emergency: emergency),
+                      ),
+                    ),
+                    icon: const Icon(Icons.visibility, size: 18),
+                    label: const Text('View Details'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            FirReportScreen(emergency: emergency),
+                      ),
+                    ),
+                    icon: const Icon(Icons.picture_as_pdf, size: 18),
+                    label: const Text('Generate FIR'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                    ),
                   ),
                 ),
               ],
             ),
-            const Divider(),
-
-            // Date & Time
-            _buildInfoRow(
-              Icons.access_time,
-              'Triggered',
-              emergency.triggeredAt.toString().substring(0, 19),
-            ),
-
-            // Location
-            _buildInfoRow(
-              Icons.location_on,
-              'Location',
-              emergency.address,
-            ),
-
-            // Police Officer
-            if (emergency.policeName != null)
-              _buildInfoRow(
-                Icons.local_police,
-                'Officer',
-                emergency.policeName!,
-              ),
-
-            // Arrival Time
-            if (emergency.policeArrivalTime != null)
-              _buildInfoRow(
-                Icons.schedule,
-                'Arrival Time',
-                emergency.policeArrivalTime!,
-              ),
-
-            // Notes
-            if (emergency.safetyNotes != null) ...[
-              const SizedBox(height: 8),
-              const Text(
-                'Notes:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              Text(emergency.safetyNotes!),
-            ],
-
-            // Download Report Button
-            if (emergency.status == EmergencyStatus.safetyConfirmed) ...[
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () async {
-                    final pdfService = PdfService();
-                    try {
-                      final pdfFile = await pdfService.generateSafetyReport(
-                        emergency,
-                      );
-                      await pdfService.sharePdf(pdfFile);
-                    } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Error: $e'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                      }
-                    }
-                  },
-                  icon: const Icon(Icons.download),
-                  label: const Text('Download Report'),
-                ),
-              ),
-            ],
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(IconData icon, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 18, color: Colors.grey),
-          const SizedBox(width: 8),
-          Expanded(
-            child: RichText(
-              text: TextSpan(
-                style: const TextStyle(color: Colors.black),
-                children: [
-                  TextSpan(
-                    text: '$label: ',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  TextSpan(text: value),
-                ],
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

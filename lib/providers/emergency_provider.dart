@@ -1,14 +1,20 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/emergency_model.dart';
 import '../models/user_model.dart';
 import '../services/emergency_service.dart';
+import '../services/firebase_service.dart';
 import '../services/power_button_service.dart';
+import '../services/volume_button_service.dart';
 
 /// Emergency provider for managing emergency state
 /// Handles emergency triggers, updates, and real-time status
 class EmergencyProvider with ChangeNotifier {
   final EmergencyService _emergencyService = EmergencyService();
+  final FirebaseService _firebaseService = FirebaseService.instance;
   final PowerButtonService _powerButtonService = PowerButtonService();
+  final VolumeButtonService _volumeButtonService = VolumeButtonService();
+  StreamSubscription<List<EmergencyModel>>? _activeEmergenciesSubscription;
   
   EmergencyModel? _currentEmergency;
   List<EmergencyModel> _emergencies = [];
@@ -20,14 +26,19 @@ class EmergencyProvider with ChangeNotifier {
 
   /// Initialize emergency provider
   Future<void> initialize(UserModel user) async {
-    // Initialize power button service
+    // Initialize power button service (foreground only)
     await _powerButtonService.initialize();
-    
-    // Listen for triple-click events
     _powerButtonService.tripleClickStream.listen((triggered) {
-      if (triggered) {
-        triggerEmergency(user);
-      }
+      if (triggered) triggerEmergency(user);
+    });
+
+    // Initialize volume button service (works in background too)
+    await _volumeButtonService.initialize(
+      phone: user.phone,
+      name: user.name,
+    );
+    _volumeButtonService.tripleClickStream.listen((triggered) {
+      if (triggered) triggerEmergency(user);
     });
 
     // Load user's emergencies
@@ -77,7 +88,23 @@ class EmergencyProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  /// Load active emergencies (for police)
+  /// Load active emergencies (for police) — real-time stream
+  void subscribeToActiveEmergencies(void Function() onUpdate) {
+    _activeEmergenciesSubscription?.cancel();
+    _activeEmergenciesSubscription = _firebaseService
+        .getActiveEmergenciesStream()
+        .listen((list) {
+      _emergencies = list;
+      _isLoading = false;
+      notifyListeners();
+      onUpdate();
+    }, onError: (e) {
+      print('Stream error, falling back to one-time fetch: $e');
+      loadActiveEmergencies();
+    });
+  }
+
+  /// Load active emergencies (one-time fetch fallback)
   Future<void> loadActiveEmergencies() async {
     _isLoading = true;
     notifyListeners();
@@ -203,11 +230,14 @@ class EmergencyProvider with ChangeNotifier {
   /// Simulate triple click (for testing)
   void simulateTripleClick() {
     _powerButtonService.simulateTripleClick();
+    _volumeButtonService.simulateTriplePress();
   }
 
   @override
   void dispose() {
+    _activeEmergenciesSubscription?.cancel();
     _powerButtonService.dispose();
+    _volumeButtonService.dispose();
     super.dispose();
   }
 }

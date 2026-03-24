@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../models/user_model.dart';
+import '../services/permission_service.dart';
 
 /// Splash screen shown on app launch
 /// Checks authentication status and navigates accordingly
@@ -21,6 +22,9 @@ class _SplashScreenState extends State<SplashScreen> {
 
   /// Initialize app and check authentication
   Future<void> _initializeApp() async {
+    // Request all permissions on first launch — Android remembers after this
+    await PermissionService.requestAll();
+
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     
     await authProvider.initialize();

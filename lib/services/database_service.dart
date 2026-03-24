@@ -75,29 +75,38 @@ class DatabaseService {
 
   /// Insert demo users for testing
   Future _insertDemoUsers(Database db) async {
-    // Demo woman user
-    await db.insert('users', {
-      'id': 'user_woman_1',
-      'name': 'Priya Sharma',
-      'email': 'priya@demo.com',
-      'phone': '+919876543210',
-      'password': 'demo123',
-      'role': 'UserRole.woman',
-      'badgeNumber': null,
-      'createdAt': DateTime.now().toIso8601String(),
-    });
+    try {
+      print('DatabaseService: Inserting demo users...');
+      
+      // Demo woman user
+      await db.insert('users', {
+        'id': 'user_woman_1',
+        'name': 'Priya Sharma',
+        'email': 'priya@demo.com',
+        'phone': '+919876543210',
+        'password': 'demo123',
+        'role': 'UserRole.woman',
+        'badgeNumber': null,
+        'createdAt': DateTime.now().toIso8601String(),
+      });
+      print('DatabaseService: Inserted woman demo user');
 
-    // Demo police user
-    await db.insert('users', {
-      'id': 'user_police_1',
-      'name': 'Officer Rajesh Kumar',
-      'email': 'police@demo.com',
-      'phone': '+919328103613',
-      'password': 'police123',
-      'role': 'UserRole.police',
-      'badgeNumber': 'POL12345',
-      'createdAt': DateTime.now().toIso8601String(),
-    });
+      // Demo police user
+      await db.insert('users', {
+        'id': 'user_police_1',
+        'name': 'Officer Rajesh Kumar',
+        'email': 'police@demo.com',
+        'phone': '+919328103613',
+        'password': 'police123',
+        'role': 'UserRole.police',
+        'badgeNumber': 'POL12345',
+        'createdAt': DateTime.now().toIso8601String(),
+      });
+      print('DatabaseService: Inserted police demo user');
+      print('DatabaseService: Demo users created successfully!');
+    } catch (e) {
+      print('DatabaseService: Error inserting demo users: $e');
+    }
   }
 
   /// Register new user
@@ -143,15 +152,40 @@ class DatabaseService {
   Future<UserModel?> loginUser(String email, String password) async {
     final db = await database;
     
+    print('DatabaseService: Attempting login for email: $email');
+    
     final result = await db.query(
       'users',
       where: 'email = ? AND password = ?',
       whereArgs: [email, password],
     );
 
-    if (result.isEmpty) return null;
+    print('DatabaseService: Query returned ${result.length} results');
+    
+    if (result.isEmpty) {
+      // Check if user exists with different password
+      final userCheck = await db.query(
+        'users',
+        where: 'email = ?',
+        whereArgs: [email],
+      );
+      if (userCheck.isNotEmpty) {
+        print('DatabaseService: User exists but password is incorrect');
+      } else {
+        print('DatabaseService: User does not exist');
+        // List all users for debugging
+        final allUsers = await db.query('users');
+        print('DatabaseService: Total users in database: ${allUsers.length}');
+        for (var user in allUsers) {
+          print('  - ${user['email']} (${user['name']})');
+        }
+      }
+      return null;
+    }
 
     final userData = result.first;
+    print('DatabaseService: Login successful for ${userData['name']}');
+    
     return UserModel(
       id: userData['id'] as String,
       name: userData['name'] as String,
